@@ -2,9 +2,8 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>NGPL Season 5 Auction</title>
+<title>NGPL Season 5 Auction - Fixed</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <style>
@@ -15,9 +14,7 @@ body{
   background-size:cover;
   background-attachment:fixed;
 }
-
 h1,h3{text-align:center;margin:6px 0}
-
 .card{
   background:rgba(255,255,255,0.95);
   padding:12px;
@@ -25,49 +22,20 @@ h1,h3{text-align:center;margin:6px 0}
   border-radius:10px;
   box-shadow:0 4px 8px rgba(0,0,0,.1)
 }
-
-.player img{
-  width:120px;
-  border-radius:50%;
-  margin-bottom:10px;
-}
-
-.bid{
-  font-size:22px;
-  color:green;
-  font-weight:bold;
-}
-
-button,input{
-  width:100%;
-  padding:8px;
-  margin-top:8px;
-  font-size:14px;
-}
-
+.bid{font-size:28px;color:green;font-weight:bold;text-align:center}
+button,input{width:100%;padding:8px;margin-top:6px}
 .team-btn{
-  background:#28a745;
-  color:white;
-  border:none;
-  border-radius:6px;
-  margin-bottom:6px;
-  cursor:pointer;
+  background:#28a745;color:white;border:none;border-radius:6px;
+  margin-bottom:6px;cursor:pointer
 }
-
-.team-btn:disabled{
-  background:#999;
-}
-
-.team-box{
-  border:1px solid #ddd;
-  border-radius:8px;
-  padding:8px;
-  margin:8px 0;
-}
-
+.team-btn.low{background:#dc3545}
+.team-btn:disabled{background:#999}
+.team-box{border:1px solid #ddd;border-radius:8px;padding:8px;margin:8px 0}
 .small{font-size:13px;color:#444}
-
 .admin-only{display:none}
+.projector .admin-only{display:none !important}
+.projector .bid{font-size:44px}
+.projector h1{font-size:38px}
 </style>
 </head>
 
@@ -75,36 +43,33 @@ button,input{
 
 <h1>🏏 Nisarg Greens Premier League</h1>
 <h3>Season 5 – Auction</h3>
+<h3 id="counter"></h3>
 
-<!-- ADMIN LOGIN -->
 <div class="card">
-  <button onclick="enterAdmin()">🔐 Enter Admin Mode</button>
+  <button id="btnEnterAdmin" onclick="enterAdmin()">🔐 Enter Admin Mode</button>
+  <button id="btnProjector" onclick="toggleProjector()">📺 Projector Mode</button>
   <p id="adminStatus" class="small"></p>
 </div>
 
-<!-- EXCEL UPLOAD -->
-<div class="card admin-only">
+<div class="card admin-only" id="adminControls">
   <input type="file" id="excelFile" accept=".xlsx">
-  <button onclick="loadExcel()">Load Players Excel</button>
+  <button id="btnLoad" onclick="loadExcel()">Load Players Excel</button>
+  <button id="btnUndo" onclick="undo()">↩ Undo Last Action</button>
 </div>
 
-<!-- CURRENT PLAYER -->
-<div class="card player">
+<div class="card">
   <h3 id="pname">No Player Loaded</h3>
-  <img id="pphoto" style="display:none">
   <p id="prole" class="small"></p>
   <p class="bid">₹ <span id="bid">0.0</span> L</p>
-  <button class="admin-only" onclick="bidUp()">Bid +0.5 L</button>
+  <button class="admin-only" id="btnBid" onclick="bidUp()">Bid +0.5 L</button>
 </div>
 
-<!-- TEAMS -->
 <div class="card">
-  <h3>Teams (Max 11 Players | 1 Cr Purse)</h3>
+  <h3>Teams</h3>
   <div id="teamButtons" class="admin-only"></div>
-  <button class="admin-only" onclick="unsold()">Mark Unsold</button>
+  <button class="admin-only" id="btnUnsold" onclick="unsold()">Mark Unsold</button>
 </div>
 
-<!-- TEAM DETAILS -->
 <div class="card">
   <h3>Team Details</h3>
   <div id="teamDetails"></div>
@@ -114,153 +79,263 @@ button,input{
 <div class="card"><h3>Unsold Players</h3><ul id="unsoldList"></ul></div>
 
 <script>
-/* ================= CONFIG ================= */
-const ADMIN_PASSWORD = "ngpl2025";
+document.addEventListener("DOMContentLoaded", function() {
+  /* ================ CONFIG ================ */
+  const ADMIN_PASSWORD = "ngpl2025";
 
-/* ================= STATE ================= */
-let isAdmin=false;
-let players=[], index=0, bid=0;
+  /* ================ STATE ================ */
+  let isAdmin = false;
+  let players = [];
+  let index = 0;
+  let bid = 0;
+  let history = [];
 
-/* ================= TEAMS ================= */
-let teams={
-  MI:{name:"MI", owner:"Owner A", captain:"Captain A", purse:100, maxBid:0, players:[]},
-  KKR:{name:"KKR", owner:"Owner B", captain:"Captain B", purse:100, maxBid:0, players:[]},
-  SRH:{name:"SRH", owner:"Owner C", captain:"Captain C", purse:100, maxBid:0, players:[]},
-  LSG:{name:"LSG", owner:"Owner D", captain:"Captain D", purse:100, maxBid:0, players:[]},
-  GT:{name:"GT", owner:"Owner E", captain:"Captain E", purse:100, maxBid:0, players:[]},
-  DC:{name:"DC", owner:"Owner F", captain:"Captain F", purse:100, maxBid:0, players:[]},
-  RR:{name:"RR", owner:"Owner G", captain:"Captain G", purse:100, maxBid:0, players:[]},
-  PBKS:{name:"PBKS", owner:"Owner H", captain:"Captain H", purse:100, maxBid:0, players:[]},
-  RCB:{name:"RCB", owner:"Owner I", captain:"Captain I", purse:100, maxBid:0, players:[]},
-  CSK:{name:"CSK", owner:"Owner J", captain:"Captain J", purse:100, maxBid:0, players:[]}
-  
-};
+  /* ================ TEAMS (owner+captain pre-filled) ================ */
+  let teams = {
+    MI: { name: "MI", owner: "Suhas Nikam", captain: "Sachin Pawar", purse: 100, maxBid: 0, players: ["Owner A", "Captain A"] },
+    KKR: { name: "KKR", owner: "Vinod Pokharkar", captain: "Prasad Bagrao", purse: 100, maxBid: 0, players: ["Owner B", "Captain B"] },
+	SRH: { name: "SRH", owner: "Rajesh Salunke", captain: "Jayesh Salunke", purse: 100, maxBid: 0, players: ["Owner C", "Captain C"] },
+    RCB: { name: "RCB", owner: "Bhushan Kamble", captain: "Rupak Singh", purse: 100, maxBid: 0, players: ["Owner D", "Captain D"] },
+	LSG: { name: "LSG", owner: "Somnath Gode", captain: "Abhishek Shindhe", purse: 100, maxBid: 0, players: ["Owner E", "Captain E"] },
+    PBKS: { name: "PBKS", owner: "Prashant Wanare", captain: "Amit Jadhav", purse: 100, maxBid: 0, players: ["Owner F", "Captain F"] },
+	DC: { name: "DC", owner: "Vijay Ahire", captain: "Sameer Sugdare", purse: 100, maxBid: 0, players: ["Owner G", "Captain G"] },
+    GT: { name: "GT", owner: "Owner H", captain: "Captain H", purse: 100, maxBid: 0, players: ["Owner H", "Captain H"] },
+	RR: { name: "RR", owner: "Owner I", captain: "Captain I", purse: 100, maxBid: 0, players: ["Owner I", "Captain I"] },
+    CSK: { name: "CSK", owner: "Owner J", captain: "Captain J", purse: 100, maxBid: 0, players: ["Owner J", "Captain J"] }
+  };
 
-/* ================= ADMIN MODE ================= */
-function enterAdmin(){
-  const pass=prompt("Enter Admin Password");
-  if(pass===ADMIN_PASSWORD){
-    isAdmin=true;
-    document.querySelectorAll(".admin-only").forEach(e=>e.style.display="block");
-    adminStatus.innerText="Admin Mode Enabled";
-  }else{
-    alert("Wrong password");
-  }
-}
+  /* ================ DOM refs ================ */
+  const adminStatus = document.getElementById("adminStatus");
+  const counterEl = document.getElementById("counter");
+  const pnameEl = document.getElementById("pname");
+  const proleEl = document.getElementById("prole");
+  const bidEl = document.getElementById("bid");
+  const teamButtonsEl = document.getElementById("teamButtons");
+  const teamDetailsEl = document.getElementById("teamDetails");
+  const soldListEl = document.getElementById("soldList");
+  const unsoldListEl = document.getElementById("unsoldList");
 
-/* ================= RENDER TEAMS ================= */
-function renderTeams(){
-  teamButtons.innerHTML="";
-  teamDetails.innerHTML="";
+  /* ================ RENDER ================ */
+  function renderTeams() {
+    teamButtonsEl.innerHTML = "";
+    teamDetailsEl.innerHTML = "";
+    for (const t in teams) {
+      const team = teams[t];
 
-  for(let t in teams){
-    const team=teams[t];
+      // create team button
+      const btn = document.createElement("button");
+      btn.id = "btn_" + t;
+      btn.className = "team-btn";
+      btn.innerHTML = `${team.name} ₹<span id="${t}">${team.purse.toFixed(1)}</span>L`;
+      btn.onclick = () => sell(t);
+      teamButtonsEl.appendChild(btn);
 
-    teamButtons.innerHTML+=`
-      <button class="team-btn" id="btn_${t}" onclick="sell('${t}')">
-        ${team.name} (₹<span id="${t}">${team.purse.toFixed(1)}</span>L)
-      </button>`;
-
-    teamDetails.innerHTML+=`
-      <div class="team-box">
+      // team details
+      const box = document.createElement("div");
+      box.className = "team-box";
+      let playersHtml = `<li><b>${team.owner}</b> (Owner)</li><li><b>${team.captain}</b> (Captain)</li>`;
+      // append any auctioned players (if any already exist)
+      for (let i = 2; i < team.players.length; i++) {
+        playersHtml += `<li>${team.players[i]}</li>`;
+      }
+      box.innerHTML = `
         <b>${team.name}</b><br>
         <span class="small">Owner: ${team.owner}</span><br>
         <span class="small">Captain: ${team.captain}</span><br>
-        <span class="small">
-          Players (<span id="count_${t}">${team.players.length}</span>/11)
-        </span>
-        <ul id="players_${t}"></ul>
-        <span class="small">
-          Highest Buy: ₹<span id="max_${t}">${team.maxBid.toFixed(1)}</span> L
-        </span>
-      </div>`;
+        <span class="small">Players (<span id="count_${t}">${team.players.length}</span>/11)</span>
+        <ul id="players_${t}">${playersHtml}</ul>
+        <span class="small">Highest Buy: ₹<span id="max_${t}">${team.maxBid.toFixed(1)}</span> L</span>
+      `;
+      teamDetailsEl.appendChild(box);
+    }
+    updateButtons(); // disable/enable based on state
   }
-}
-renderTeams();
 
-/* ================= EXCEL ================= */
-function loadExcel(){
-  if(!isAdmin) return;
-  const file=excelFile.files[0];
-  if(!file){alert("Select Excel file");return;}
+  renderTeams();
 
-  const reader=new FileReader();
-  reader.onload=e=>{
-    const wb=XLSX.read(new Uint8Array(e.target.result),{type:"array"});
-    players=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-    index=0;
+  /* ================ ADMIN MODE ================ */
+  function enterAdmin() {
+    const pass = prompt("Enter Admin Password");
+    if (pass === ADMIN_PASSWORD) {
+      isAdmin = true;
+      document.querySelectorAll(".admin-only").forEach(e => e.style.display = "block");
+      adminStatus.innerText = "Admin Mode Enabled";
+    } else {
+      alert("Wrong password");
+    }
+  }
+
+  function toggleProjector() {
+    document.body.classList.toggle("projector");
+  }
+
+  /* ================ EXCEL LOAD ================ */
+  function loadExcel() {
+    if (!isAdmin) return alert("Admin only");
+    const fileInput = document.getElementById("excelFile");
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) return alert("Please select an .xlsx file (headers: Name, Role, BasePrice, Photo)");
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, { type: "array" });
+        const sheetName = wb.SheetNames[0];
+        players = XLSX.utils.sheet_to_json(wb.Sheets[sheetName]);
+        if (!players || players.length === 0) return alert("No rows found in Excel sheet");
+        index = 0;
+        loadPlayer();
+        updateCounter();
+      } catch (err) {
+        console.error(err);
+        alert("Failed to read excel. Make sure it's valid .xlsx");
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  /* ================ PLAYER LOAD & BID ================ */
+  function loadPlayer() {
+    if (!players || index >= players.length) {
+      pnameEl.innerText = "Auction Completed";
+      proleEl.innerText = "";
+      bid = 0;
+      updateBidUI();
+      updateCounter();
+      return;
+    }
+    const p = players[index];
+    pnameEl.innerText = p.Name || "Unnamed Player";
+    proleEl.innerText = p.Role || "";
+    bid = Number(p.BasePrice) || 0;
+    updateBidUI();
+    updateCounter();
+    updateButtons();
+  }
+
+  function updateBidUI() {
+    bidEl.innerText = bid.toFixed(1);
+  }
+
+  function bidUp() {
+    if (!isAdmin) return;
+    bid += 0.5;
+    updateBidUI();
+    updateButtons();
+  }
+
+  function updateCounter() {
+    counterEl.innerText = players && players.length ? `Player ${Math.min(index + 1, players.length)} / ${players.length}` : "";
+  }
+
+  /* ================ BUTTON STATE ================ */
+  function updateButtons() {
+    for (const t in teams) {
+      const team = teams[t];
+      const btn = document.getElementById("btn_" + t);
+      if (!btn) continue;
+      // disabled if full (11) or purse < bid
+      btn.disabled = team.players.length >= 11 || team.purse < bid;
+      // low purse class if under 10 L remaining
+      if (team.purse < 10) btn.classList.add("low"); else btn.classList.remove("low");
+    }
+  }
+
+  /* ================ SELL / UNSOLD ================ */
+  function sell(teamKey) {
+    if (!isAdmin) return alert("Admin only");
+    if (!players || index >= players.length) return;
+    const team = teams[teamKey];
+    if (!team) return alert("Unknown team");
+    if (team.players.length >= 11) return alert("Team already has 11 players");
+    if (team.purse < bid) return alert("Not enough purse left");
+
+    // record history for undo
+    history.push({ type: "sold", team: teamKey, playerIndex: index, bid: bid });
+
+    // apply sale
+    team.purse -= bid;
+    team.players.push(players[index].Name || "Unnamed");
+    team.maxBid = Math.max(team.maxBid, bid);
+
+    // update UI pieces
+    const purseSpan = document.getElementById(teamKey);
+    if (purseSpan) purseSpan.innerText = team.purse.toFixed(1);
+    const playersUl = document.getElementById("players_" + teamKey);
+    if (playersUl) playersUl.insertAdjacentHTML("beforeend", `<li>${players[index].Name} (${players[index].Role||""})</li>`);
+    const countSpan = document.getElementById("count_" + teamKey);
+    if (countSpan) countSpan.innerText = team.players.length;
+    const maxSpan = document.getElementById("max_" + teamKey);
+    if (maxSpan) maxSpan.innerText = team.maxBid.toFixed(1);
+
+    soldListEl.insertAdjacentHTML("beforeend", `<li>${players[index].Name} → ${team.name} (₹${bid.toFixed(1)} L)</li>`);
+
+    index++;
     loadPlayer();
-  };
-  reader.readAsArrayBuffer(file);
-}
-
-/* ================= PLAYER ================= */
-function loadPlayer(){
-  if(index>=players.length){
-    pname.innerText="Auction Completed";
-    bid=0;
-    bidSpan();
-    return;
-  }
-  const p=players[index];
-  pname.innerText=p.Name||"Unnamed";
-  prole.innerText=p.Role||"";
-  bid=Number(p.BasePrice)||0;
-  bidSpan();
-}
-
-function bidUp(){
-  if(isAdmin){bid+=0.5;bidSpan();}
-}
-
-function bidSpan(){
-  document.getElementById("bid").innerText=bid.toFixed(1);
-}
-
-/* ================= SELL ================= */
-function sell(t){
-  if(!isAdmin) return;
-
-  const team=teams[t];
-
-  if(team.players.length>=11){
-    alert("Team already has 11 players");
-    return;
-  }
-  if(team.purse<bid){
-    alert("Not enough purse");
-    return;
   }
 
-  team.purse-=bid;
-  team.players.push(players[index].Name);
-  team.maxBid=Math.max(team.maxBid,bid);
-
-  document.getElementById(t).innerText=team.purse.toFixed(1);
-  document.getElementById("players_"+t).innerHTML+=
-    `<li>${players[index].Name}</li>`;
-  document.getElementById("count_"+t).innerText=team.players.length;
-  document.getElementById("max_"+t).innerText=team.maxBid.toFixed(1);
-
-  if(team.players.length>=11){
-    document.getElementById("btn_"+t).disabled=true;
+  function unsold() {
+    if (!isAdmin) return alert("Admin only");
+    if (!players || index >= players.length) return;
+    history.push({ type: "unsold", playerIndex: index });
+    unsoldListEl.insertAdjacentHTML("beforeend", `<li>${players[index].Name}</li>`);
+    index++;
+    loadPlayer();
   }
 
-  soldList.innerHTML+=
-    `<li>${players[index].Name} → ${team.name} (₹${bid.toFixed(1)} L)</li>`;
+  /* ================ UNDO ================ */
+  function undo() {
+    if (!isAdmin) return alert("Admin only");
+    const last = history.pop();
+    if (!last) return alert("Nothing to undo");
+    // move index back to the undone player's index
+    index = last.playerIndex;
+    // revert sold
+    if (last.type === "sold") {
+      const team = teams[last.team];
+      // remove last added player (if matches) - be conservative
+      if (team.players.length && team.players[team.players.length - 1] === players[index].Name) {
+        team.players.pop();
+      }
+      team.purse += last.bid;
+      // recalculating maxBid is simple: recompute from team.players (scan soldList) or reset to 0 (we'll recompute roughly)
+      team.maxBid = Math.max(0, team.maxBid); // keep it simple (advanced: recompute from history)
+      // update UI
+      const purseSpan = document.getElementById(last.team);
+      if (purseSpan) purseSpan.innerText = team.purse.toFixed(1);
+      const playersUl = document.getElementById("players_" + last.team);
+      if (playersUl) {
+        // remove last <li> (best-effort)
+        if (playersUl.lastElementChild) playersUl.removeChild(playersUl.lastElementChild);
+      }
+      const countSpan = document.getElementById("count_" + last.team);
+      if (countSpan) countSpan.innerText = team.players.length;
+      // remove last soldList entry
+      if (soldListEl.lastElementChild) soldListEl.removeChild(soldListEl.lastElementChild);
+    } else if (last.type === "unsold") {
+      // remove last unsold entry
+      if (unsoldListEl.lastElementChild) unsoldListEl.removeChild(unsoldListEl.lastElementChild);
+    }
+    loadPlayer();
+  }
 
-  index++;
-  loadPlayer();
-}
+  /* ================ EXPORT TO window for inline onclicks ================ */
+  window.enterAdmin = enterAdmin;
+  window.toggleProjector = toggleProjector;
+  window.loadExcel = loadExcel;
+  window.bidUp = bidUp;
+  window.sell = sell;
+  window.unsold = unsold;
+  window.undo = undo;
 
-/* ================= UNSOLD ================= */
-function unsold(){
-  if(!isAdmin) return;
-  unsoldList.innerHTML+=`<li>${players[index].Name}</li>`;
-  index++;
-  loadPlayer();
-}
+  /* expose helper to update buttons if other changes occur */
+  window.renderTeams = renderTeams;
+  window.updateButtons = updateButtons;
+
+  /* ========= initial UI state ========= */
+  updateBidUI();
+  renderTeams();
+});
 </script>
-
 </body>
 </html>
