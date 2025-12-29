@@ -2,22 +2,72 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>NGPL Season 5 Auction - Fixed</title>
+<title>NGPL Season 5 Auction</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<!-- XLSX library -->
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <style>
-body { font-family: Arial; background:#eef2f7; padding:10px }
-h1,h3 { text-align:center; margin:6px 0 }
-.card { background:#fff; padding:12px; margin:10px 0; border-radius:10px; box-shadow:0 4px 8px rgba(0,0,0,.08) }
-.player img { width:120px; border-radius:50%; margin-bottom:10px }
-.bid { font-size:22px; color:green; font-weight:bold }
-button,input { width:100%; padding:8px; margin-top:8px; font-size:14px }
-.team-btn { background:#28a745; color:white; margin-bottom:6px; border:none; padding:10px; border-radius:6px; cursor:pointer; }
-.team-box { border:1px solid #ddd; border-radius:8px; padding:8px; margin:8px 0 }
-.team-box ul { margin:6px 0 0 16px; padding:0 }
-.small { font-size:13px; color:#444 }
+body{
+  font-family: Arial;
+  padding:10px;
+  background-image:url("https://images.unsplash.com/photo-1540747913346-19e32dc3e97e");
+  background-size:cover;
+  background-attachment:fixed;
+}
+
+h1,h3{text-align:center;margin:6px 0}
+
+.card{
+  background:rgba(255,255,255,0.95);
+  padding:12px;
+  margin:10px 0;
+  border-radius:10px;
+  box-shadow:0 4px 8px rgba(0,0,0,.1)
+}
+
+.player img{
+  width:120px;
+  border-radius:50%;
+  margin-bottom:10px;
+}
+
+.bid{
+  font-size:22px;
+  color:green;
+  font-weight:bold;
+}
+
+button,input{
+  width:100%;
+  padding:8px;
+  margin-top:8px;
+  font-size:14px;
+}
+
+.team-btn{
+  background:#28a745;
+  color:white;
+  border:none;
+  border-radius:6px;
+  margin-bottom:6px;
+  cursor:pointer;
+}
+
+.team-btn:disabled{
+  background:#999;
+}
+
+.team-box{
+  border:1px solid #ddd;
+  border-radius:8px;
+  padding:8px;
+  margin:8px 0;
+}
+
+.small{font-size:13px;color:#444}
+
+.admin-only{display:none}
 </style>
 </head>
 
@@ -26,28 +76,32 @@ button,input { width:100%; padding:8px; margin-top:8px; font-size:14px }
 <h1>🏏 Nisarg Greens Premier League</h1>
 <h3>Season 5 – Auction</h3>
 
-<!-- EXCEL UPLOAD -->
+<!-- ADMIN LOGIN -->
 <div class="card">
-  <label><strong>Upload players Excel (.xlsx)</strong> — first sheet will be used (headers: Name, Role, BasePrice, Photo)</label>
+  <button onclick="enterAdmin()">🔐 Enter Admin Mode</button>
+  <p id="adminStatus" class="small"></p>
+</div>
+
+<!-- EXCEL UPLOAD -->
+<div class="card admin-only">
   <input type="file" id="excelFile" accept=".xlsx">
-  <button id="btnLoad" onclick="loadExcel()">Load Players Excel</button>
+  <button onclick="loadExcel()">Load Players Excel</button>
 </div>
 
 <!-- CURRENT PLAYER -->
 <div class="card player">
   <h3 id="pname">No Player Loaded</h3>
-  <img id="pphoto" style="display:none" alt="player photo">
-  <input type="file" accept="image/*" onchange="uploadPhoto(this)">
+  <img id="pphoto" style="display:none">
   <p id="prole" class="small"></p>
   <p class="bid">₹ <span id="bid">0.0</span> L</p>
-  <button onclick="bidUp()">Bid +0.5 L</button>
+  <button class="admin-only" onclick="bidUp()">Bid +0.5 L</button>
 </div>
 
 <!-- TEAMS -->
 <div class="card">
   <h3>Teams (Max 11 Players | 1 Cr Purse)</h3>
-  <div id="teamButtons"></div>
-  <button onclick="unsold()">Mark Unsold</button>
+  <div id="teamButtons" class="admin-only"></div>
+  <button class="admin-only" onclick="unsold()">Mark Unsold</button>
 </div>
 
 <!-- TEAM DETAILS -->
@@ -56,173 +110,157 @@ button,input { width:100%; padding:8px; margin-top:8px; font-size:14px }
   <div id="teamDetails"></div>
 </div>
 
-<!-- SOLD / UNSOLD -->
-<div class="card">
-  <h3>Sold Players</h3>
-  <ul id="soldList"></ul>
-</div>
-
-<div class="card">
-  <h3>Unsold Players</h3>
-  <ul id="unsoldList"></ul>
-</div>
+<div class="card"><h3>Sold Players</h3><ul id="soldList"></ul></div>
+<div class="card"><h3>Unsold Players</h3><ul id="unsoldList"></ul></div>
 
 <script>
-/* ---------- DATA ---------- */
-let players = [];
-let index = 0;
-let bid = 0;
+/* ================= CONFIG ================= */
+const ADMIN_PASSWORD = "ngpl2025";
 
-/* Team master data (purse in LAKHS: 100 = 1 Cr) */
-let teams = {
-  MI: { name: "Mumbai Indians", owner: "Owner A", captain: "Captain A", purse: 100, maxBid: 0, players: [] },
-  RCB: { name: "RCB", owner: "Owner B", captain: "Captain B", purse: 100, maxBid: 0, players: [] },
-  CSK: { name: "CSK", owner: "Owner C", captain: "Captain C", purse: 100, maxBid: 0, players: [] },
-  KKR: { name: "KKR", owner: "Owner D", captain: "Captain D", purse: 100, maxBid: 0, players: [] }
+/* ================= STATE ================= */
+let isAdmin=false;
+let players=[], index=0, bid=0;
+
+/* ================= TEAMS ================= */
+let teams={
+  MI:{name:"MI", owner:"Owner A", captain:"Captain A", purse:100, maxBid:0, players:[]},
+  KKR:{name:"KKR", owner:"Owner B", captain:"Captain B", purse:100, maxBid:0, players:[]},
+  SRH:{name:"SRH", owner:"Owner C", captain:"Captain C", purse:100, maxBid:0, players:[]},
+  LSG:{name:"LSG", owner:"Owner D", captain:"Captain D", purse:100, maxBid:0, players:[]},
+  GT:{name:"GT", owner:"Owner E", captain:"Captain E", purse:100, maxBid:0, players:[]},
+  DC:{name:"DC", owner:"Owner F", captain:"Captain F", purse:100, maxBid:0, players:[]},
+  RR:{name:"RR", owner:"Owner G", captain:"Captain G", purse:100, maxBid:0, players:[]},
+  PBKS:{name:"PBKS", owner:"Owner H", captain:"Captain H", purse:100, maxBid:0, players:[]},
+  RCB:{name:"RCB", owner:"Owner I", captain:"Captain I", purse:100, maxBid:0, players:[]},
+  CSK:{name:"CSK", owner:"Owner J", captain:"Captain J", purse:100, maxBid:0, players:[]}
+  
 };
 
-/* ---------- SAFETY: alias in case old HTML calls loadElement() ---------- */
-function loadElement(){ loadExcel(); }
-
-/* ---------- RENDER UI ---------- */
-function renderTeams(){
-  const btnContainer = document.getElementById('teamButtons');
-  const detailsContainer = document.getElementById('teamDetails');
-  btnContainer.innerHTML = '';
-  detailsContainer.innerHTML = '';
-  for (const key in teams){
-    const t = teams[key];
-    // team button
-    const btn = document.createElement('button');
-    btn.className = 'team-btn';
-    btn.innerHTML = `${t.name} (₹<span id="${key}">${t.purse}</span>L)`;
-    btn.onclick = () => sell(key);
-    btnContainer.appendChild(btn);
-    // team detail box
-    const box = document.createElement('div');
-    box.className = 'team-box';
-    box.innerHTML = `
-      <strong>${t.name}</strong><div class="small">Owner: ${t.owner}</div>
-      <div class="small">Captain: ${t.captain}</div>
-      <div class="small">Players: <span id="${key}_count">${t.players.length}</span>/11</div>
-      <ul id="players_${key}"></ul>
-      <div class="small">Highest Buy: ₹ <span id="max_${key}">${t.maxBid.toFixed(1)}</span> L</div>
-    `;
-    detailsContainer.appendChild(box);
+/* ================= ADMIN MODE ================= */
+function enterAdmin(){
+  const pass=prompt("Enter Admin Password");
+  if(pass===ADMIN_PASSWORD){
+    isAdmin=true;
+    document.querySelectorAll(".admin-only").forEach(e=>e.style.display="block");
+    adminStatus.innerText="Admin Mode Enabled";
+  }else{
+    alert("Wrong password");
   }
 }
 
-/* initial render */
+/* ================= RENDER TEAMS ================= */
+function renderTeams(){
+  teamButtons.innerHTML="";
+  teamDetails.innerHTML="";
+
+  for(let t in teams){
+    const team=teams[t];
+
+    teamButtons.innerHTML+=`
+      <button class="team-btn" id="btn_${t}" onclick="sell('${t}')">
+        ${team.name} (₹<span id="${t}">${team.purse.toFixed(1)}</span>L)
+      </button>`;
+
+    teamDetails.innerHTML+=`
+      <div class="team-box">
+        <b>${team.name}</b><br>
+        <span class="small">Owner: ${team.owner}</span><br>
+        <span class="small">Captain: ${team.captain}</span><br>
+        <span class="small">
+          Players (<span id="count_${t}">${team.players.length}</span>/11)
+        </span>
+        <ul id="players_${t}"></ul>
+        <span class="small">
+          Highest Buy: ₹<span id="max_${t}">${team.maxBid.toFixed(1)}</span> L
+        </span>
+      </div>`;
+  }
+}
 renderTeams();
 
-/* ---------- EXCEL LOAD ---------- */
+/* ================= EXCEL ================= */
 function loadExcel(){
-  const fileInput = document.getElementById('excelFile');
-  const file = fileInput.files && fileInput.files[0];
-  if (!file) { alert('Please select an Excel (.xlsx) file to upload.'); return; }
+  if(!isAdmin) return;
+  const file=excelFile.files[0];
+  if(!file){alert("Select Excel file");return;}
 
-  const reader = new FileReader();
-  reader.onload = function(e){
-    try {
-      const data = new Uint8Array(e.target.result);
-      const wb = XLSX.read(data, { type: 'array' });
-      const sheetName = wb.SheetNames[0];
-      players = XLSX.utils.sheet_to_json(wb.Sheets[sheetName]);
-      if (!players || players.length === 0) { alert('No rows found. Check headers (Name, Role, BasePrice, Photo).'); return; }
-      index = 0;
-      loadPlayer();
-      console.log('Players loaded:', players);
-    } catch(err){
-      console.error(err);
-      alert('Failed to read Excel file. Make sure it is a valid .xlsx file.');
-    }
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const wb=XLSX.read(new Uint8Array(e.target.result),{type:"array"});
+    players=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+    index=0;
+    loadPlayer();
   };
   reader.readAsArrayBuffer(file);
 }
 
-/* ---------- PLAYER LOAD / BID ---------- */
+/* ================= PLAYER ================= */
 function loadPlayer(){
-  if (index >= players.length){
-    document.getElementById('pname').innerText = 'Auction Completed';
-    document.getElementById('pphoto').style.display = 'none';
-    document.getElementById('prole').innerText = '';
-    document.getElementById('bid').innerText = '0.0';
+  if(index>=players.length){
+    pname.innerText="Auction Completed";
+    bid=0;
+    bidSpan();
     return;
   }
-  const p = players[index];
-  document.getElementById('pname').innerText = p.Name || 'Unnamed Player';
-  document.getElementById('prole').innerText = p.Role || '';
-  if (p.Photo){
-    document.getElementById('pphoto').src = p.Photo;
-    document.getElementById('pphoto').style.display = 'block';
-  } else {
-    document.getElementById('pphoto').style.display = 'none';
-  }
-  bid = Number(p.BasePrice) || 0;
-  document.getElementById('bid').innerText = bid.toFixed(1);
+  const p=players[index];
+  pname.innerText=p.Name||"Unnamed";
+  prole.innerText=p.Role||"";
+  bid=Number(p.BasePrice)||0;
+  bidSpan();
 }
 
 function bidUp(){
-  bid += 0.5; // increase by 0.5 Lakhs
-  document.getElementById('bid').innerText = bid.toFixed(1);
+  if(isAdmin){bid+=0.5;bidSpan();}
 }
 
-/* ---------- SELL / UNSOLD ---------- */
-function sell(teamKey){
-  const t = teams[teamKey];
-  if (!t) { alert('Unknown team'); return; }
-  if (t.players.length >= 11) { alert('Team already has 11 players'); return; }
-  if (t.purse < bid) { alert('Not enough purse left'); return; }
+function bidSpan(){
+  document.getElementById("bid").innerText=bid.toFixed(1);
+}
 
-  // deduct purse, add player
-  t.purse -= bid;
-  t.players.push(players[index].Name || 'Unnamed');
+/* ================= SELL ================= */
+function sell(t){
+  if(!isAdmin) return;
 
-  // update maxBid
-  if (bid > t.maxBid) t.maxBid = bid;
+  const team=teams[t];
 
-  // update UI: purse, player list, max buy, count
-  document.getElementById(teamKey).innerText = t.purse.toFixed(1);
-  const playersList = document.getElementById('players_' + teamKey);
-  if (playersList) playersList.innerHTML += `<li>${players[index].Name} (${players[index].Role || ''})</li>`;
-  const countSpan = document.getElementById(teamKey + '_count');
-  if (countSpan) countSpan.innerText = t.players.length;
-  const maxSpan = document.getElementById('max_' + teamKey);
-  if (maxSpan) maxSpan.innerText = t.maxBid.toFixed(1);
+  if(team.players.length>=11){
+    alert("Team already has 11 players");
+    return;
+  }
+  if(team.purse<bid){
+    alert("Not enough purse");
+    return;
+  }
 
-  // sold list
-  const soldList = document.getElementById('soldList');
-  soldList.innerHTML += `<li>${players[index].Name} → ${t.name} (₹${bid.toFixed(1)} L)</li>`;
+  team.purse-=bid;
+  team.players.push(players[index].Name);
+  team.maxBid=Math.max(team.maxBid,bid);
 
-  // advance to next player
+  document.getElementById(t).innerText=team.purse.toFixed(1);
+  document.getElementById("players_"+t).innerHTML+=
+    `<li>${players[index].Name}</li>`;
+  document.getElementById("count_"+t).innerText=team.players.length;
+  document.getElementById("max_"+t).innerText=team.maxBid.toFixed(1);
+
+  if(team.players.length>=11){
+    document.getElementById("btn_"+t).disabled=true;
+  }
+
+  soldList.innerHTML+=
+    `<li>${players[index].Name} → ${team.name} (₹${bid.toFixed(1)} L)</li>`;
+
   index++;
   loadPlayer();
 }
 
+/* ================= UNSOLD ================= */
 function unsold(){
-  const name = (players[index] && players[index].Name) || 'Unnamed';
-  document.getElementById('unsoldList').innerHTML += `<li>${name}</li>`;
+  if(!isAdmin) return;
+  unsoldList.innerHTML+=`<li>${players[index].Name}</li>`;
   index++;
   loadPlayer();
 }
-
-/* ---------- PHOTO UPLOAD (override) ---------- */
-function uploadPhoto(input){
-  const file = input.files && input.files[0];
-  if (!file) return;
-  const url = URL.createObjectURL(file);
-  const img = document.getElementById('pphoto');
-  img.src = url;
-  img.style.display = 'block';
-}
-
-/* expose functions to global in case of inline onclicks */
-window.loadExcel = loadExcel;
-window.bidUp = bidUp;
-window.sell = sell;
-window.unsold = unsold;
-window.uploadPhoto = uploadPhoto;
-window.loadElement = loadElement; /* safety alias */
 </script>
+
 </body>
 </html>
