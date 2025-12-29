@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>NGPL Auction – Live</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<style>
+body{font-family:Arial;background:#111;color:white;text-align:center;padding:20px}
+.bid{font-size:40px;color:#00ff6a}
+.card{background:#222;padding:20px;border-radius:12px}
+</style>
+</head>
+
+<body>
+
+<h1>🏏 NGPL LIVE AUCTION</h1>
+
+<div class="card">
+  <h2 id="pname">Waiting…</h2>
+  <p id="prole"></p>
+  <div class="bid">₹ <span id="bid">0.0</span> L</div>
+</div>
+
+<script>
+/* 🔥 SAME FIREBASE CONFIG */
+const firebaseConfig = {
+  apiKey: "PASTE_HERE",
+  authDomain: "PASTE_HERE",
+  databaseURL: "PASTE_HERE",
+  projectId: "PASTE_HERE",
+  storageBucket: "PASTE_HERE",
+  messagingSenderId: "PASTE_HERE",
+  appId: "PASTE_HERE"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+db.ref("auction").on("value", snap=>{
+  const d=snap.val();
+  if(!d||!d.currentPlayer)return;
+  pname.innerText=d.currentPlayer.Name;
+  prole.innerText=d.currentPlayer.Role||"";
+  bid.innerText=d.bid.toFixed(1);
+});
+</script>
+
+</body>
+</html>
