@@ -24,7 +24,7 @@ button,input{width:100%;padding:8px;margin-top:6px}
 
 <div class="card">
   <input type="file" id="excelFile" accept=".xlsx">
-  <button onclick="loadExcel()">Load Players Excel</button>
+  <button id="loadBtn">Load Players Excel</button>
 </div>
 
 <div class="card">
@@ -42,7 +42,12 @@ button,input{width:100%;padding:8px;margin-top:6px}
 </div>
 
 <script>
-/* 🔥 FIREBASE CONFIG (PASTE YOURS HERE) */
+/* ================= GLOBAL STATE (DECLARE FIRST!) ================= */
+let players = [];
+let index = 0;
+let bid = 0;
+
+/* ================= FIREBASE CONFIG ================= */
 const firebaseConfig = {
   apiKey: "PASTE_HERE",
   authDomain: "PASTE_HERE",
@@ -56,11 +61,8 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-/* STATE */
-let players=[], index=0, bid=0;
-
-/* PUSH STATE TO FIREBASE */
-function sync(){
+/* ================= SYNC ================= */
+function sync() {
   db.ref("auction").set({
     current: players[index] || null,
     bid,
@@ -68,45 +70,76 @@ function sync(){
   });
 }
 
-/* LOAD EXCEL */
-function loadExcel(){
-  const f=excelFile.files[0];
-  const r=new FileReader();
-  r.onload=e=>{
-    const wb=XLSX.read(new Uint8Array(e.target.result),{type:"array"});
-    players=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-    index=0;
+/* ================= LOAD EXCEL (FIXED) ================= */
+document.getElementById("loadBtn").addEventListener("click", () => {
+  const file = document.getElementById("excelFile").files[0];
+  if (!file) {
+    alert("Please select Excel file");
+    return;
+  }
+
+  const reader = new FileReader();
+
+  reader.onload = function (e) {
+    const data = new Uint8Array(e.target.result);
+    const workbook = XLSX.read(data, { type: "array" });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+
+    players = XLSX.utils.sheet_to_json(sheet);
+    index = 0;
     loadPlayer();
   };
-  r.readAsArrayBuffer(f);
-}
 
-/* PLAYER */
-function loadPlayer(){
-  if(index>=players.length) return;
-  pname.innerText=players[index].Name;
-  prole.innerText=players[index].Role||"";
-  bid=Number(players[index].BasePrice)||0;
-  bidSpan();
+  reader.readAsArrayBuffer(file);
+});
+
+/* ================= PLAYER ================= */
+function loadPlayer() {
+  if (index >= players.length) {
+    pname.innerText = "Auction Completed";
+    bid = 0;
+    updateBid();
+    return;
+  }
+
+  const p = players[index];
+  pname.innerText = p.Name || "Unnamed Player";
+  prole.innerText = p.Role || "";
+  bid = Number(p.BasePrice) || 0;
+  updateBid();
   sync();
 }
 
-function bidUp(){ bid+=0.5; bidSpan(); sync(); }
-function bidSpan(){ bidEl.innerText=bid.toFixed(1); }
-const bidEl=document.getElementById("bid");
-
-/* SELL / UNSOLD */
-function sell(team){
-  db.ref("sold").push({
-    name:players[index].Name,
-    team,bid
-  });
-  index++; loadPlayer();
+function bidUp() {
+  bid += 0.5;
+  updateBid();
+  sync();
 }
 
-function markUnsold(){
+function updateBid() {
+  document.getElementById("bid").innerText = bid.toFixed(1);
+}
+
+/* ================= SELL / UNSOLD ================= */
+function sell(team) {
+  if (!players[index]) return;
+
+  db.ref("sold").push({
+    name: players[index].Name,
+    team,
+    bid
+  });
+
+  index++;
+  loadPlayer();
+}
+
+function markUnsold() {
+  if (!players[index]) return;
+
   db.ref("unsold").push(players[index].Name);
-  index++; loadPlayer();
+  index++;
+  loadPlayer();
 }
 </script>
 
