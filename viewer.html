@@ -9,9 +9,23 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
 <style>
-body{font-family:Arial;background:#111;color:white;text-align:center;padding:20px}
-.bid{font-size:40px;color:#00ff6a}
-.card{background:#222;padding:20px;border-radius:12px}
+body{
+  font-family:Arial;
+  background:#111;
+  color:white;
+  text-align:center;
+  padding:20px
+}
+.card{
+  background:#222;
+  padding:20px;
+  border-radius:12px
+}
+.bid{
+  font-size:48px;
+  color:#00ff6a;
+  font-weight:bold
+}
 </style>
 </head>
 
@@ -28,22 +42,24 @@ body{font-family:Arial;background:#111;color:white;text-align:center;padding:20p
 <script>
 /* 🔥 SAME FIREBASE CONFIG */
 const firebaseConfig = {
-  apiKey: "PASTE_HERE",
-  authDomain: "PASTE_HERE",
-  databaseURL: "PASTE_HERE",
-  projectId: "PASTE_HERE",
-  storageBucket: "PASTE_HERE",
-  messagingSenderId: "PASTE_HERE",
-  appId: "PASTE_HERE"
+  apiKey: "AIzaSyDHWCPegKtwhLgJ7OJr9QjayDK1QTf8UP0",
+  authDomain: "ngpl-auction.firebaseapp.com",
+  databaseURL: "https://ngpl-auction-default-rtdb.firebaseio.com",
+  projectId: "ngpl-auction",
+  storageBucket: "ngpl-auction.firebasestorage.app",
+  messagingSenderId: "80963451556",
+  appId: "1:80963451556:web:663f478280a60ab4de8431"
 };
+
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
+/* LIVE LISTENER */
 db.ref("auction").on("value", snap=>{
   const d=snap.val();
-  if(!d||!d.currentPlayer)return;
-  pname.innerText=d.currentPlayer.Name;
-  prole.innerText=d.currentPlayer.Role||"";
+  if(!d || !d.current) return;
+  pname.innerText=d.current.Name;
+  prole.innerText=d.current.Role||"";
   bid.innerText=d.bid.toFixed(1);
 });
 </script>
