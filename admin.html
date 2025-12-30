@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>NGPL Auction – Admin</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<style>
+body{font-family:Arial;background:#eef2f7;padding:10px}
+.card{background:#fff;padding:12px;margin:10px 0;border-radius:10px}
+button,input{width:100%;padding:8px;margin-top:6px}
+.bid{font-size:26px;color:green;font-weight:bold;text-align:center}
+.team-btn{background:#28a745;color:white;border:none;border-radius:6px;margin-bottom:6px}
+</style>
+</head>
+
+<body>
+
+<h2>🔐 NGPL Auction – Admin</h2>
+
+<div class="card">
+  <input type="file" id="excelFile" accept=".xlsx">
+  <button id="loadBtn">Load Players Excel</button>
+</div>
+
+<div class="card">
+  <h3 id="pname">No Player</h3>
+  <p id="prole"></p>
+  <div class="bid">₹ <span id="bid">0.0</span> L</div>
+  <button onclick="bidUp()">Bid +0.5 L</button>
+</div>
+
+<div class="card">
+  <button class="team-btn" onclick="sell('MI')">Sell to MI</button>
+  <button class="team-btn" onclick="sell('CSK')">Sell to CSK</button>
+  <button class="team-btn" onclick="sell('RCB')">Sell to RCB</button>
+  <button onclick="markUnsold()">Mark Unsold</button>
+</div>
+
+<script>
+/* ================= GLOBAL STATE (DECLARE FIRST!) ================= */
+let players = [];
+let index = 0;
+let bid = 0;
+
+/* ================= FIREBASE CONFIG ================= */
+const firebaseConfig = {
+  apiKey: "PASTE_HERE",
+  authDomain: "PASTE_HERE",
+  databaseURL: "PASTE_HERE",
+  projectId: "PASTE_HERE",
+  storageBucket: "PASTE_HERE",
+  messagingSenderId: "PASTE_HERE",
+  appId: "PASTE_HERE"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+/* ================= SYNC ================= */
+function sync() {
+  db.ref("auction").set({
+    current: players[index] || null,
+    bid,
+    index
+  });
+}
+
+/* ================= LOAD EXCEL (FIXED) ================= */
+document.getElementById("loadBtn").addEventListener("click", () => {
+  const file = document.getElementById("excelFile").files[0];
+  if (!file) {
+    alert("Please select Excel file");
+    return;
+  }
+
+  const reader = new FileReader();
+
+  reader.onload = function (e) {
+    const data = new Uint8Array(e.target.result);
+    const workbook = XLSX.read(data, { type: "array" });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+
+    players = XLSX.utils.sheet_to_json(sheet);
+    index = 0;
+    loadPlayer();
+  };
+
+  reader.readAsArrayBuffer(file);
+});
+
+/* ================= PLAYER ================= */
+function loadPlayer() {
+  if (index >= players.length) {
+    pname.innerText = "Auction Completed";
+    bid = 0;
+    updateBid();
+    return;
+  }
+
+  const p = players[index];
+  pname.innerText = p.Name || "Unnamed Player";
+  prole.innerText = p.Role || "";
+  bid = Number(p.BasePrice) || 0;
+  updateBid();
+  sync();
+}
+
+function bidUp() {
+  bid += 0.5;
+  updateBid();
+  sync();
+}
+
+function updateBid() {
+  document.getElementById("bid").innerText = bid.toFixed(1);
+}
+
+/* ================= SELL / UNSOLD ================= */
+function sell(team) {
+  if (!players[index]) return;
+
+  db.ref("sold").push({
+    name: players[index].Name,
+    team,
+    bid
+  });
+
+  index++;
+  loadPlayer();
+}
+
+function markUnsold() {
+  if (!players[index]) return;
+
+  db.ref("unsold").push(players[index].Name);
+  index++;
+  loadPlayer();
+}
+</script>
+
+</body>
+</html>
