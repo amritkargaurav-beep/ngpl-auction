@@ -31,116 +31,117 @@ button,input{width:100%;padding:8px;margin-top:6px}
   <h3 id="pname">No Player</h3>
   <p id="prole"></p>
   <div class="bid">₹ <span id="bid">0.0</span> L</div>
-  <button onclick="bidUp()">Bid +0.5 L</button>
+  <button id="bidBtn">Bid +0.5 L</button>
 </div>
 
 <div class="card">
-  <button class="team-btn" onclick="sell('MI')">Sell to MI</button>
-  <button class="team-btn" onclick="sell('CSK')">Sell to CSK</button>
-  <button class="team-btn" onclick="sell('RCB')">Sell to RCB</button>
-  <button onclick="markUnsold()">Mark Unsold</button>
+  <button class="team-btn" id="sellMI">Sell to MI</button>
+  <button class="team-btn" id="sellCSK">Sell to CSK</button>
+  <button class="team-btn" id="sellRCB">Sell to RCB</button>
+  <button id="unsoldBtn">Mark Unsold</button>
 </div>
 
 <script>
-/* ================= GLOBAL STATE (DECLARE FIRST!) ================= */
-let players = [];
-let index = 0;
-let bid = 0;
+document.addEventListener("DOMContentLoaded", () => {
 
-/* ================= FIREBASE CONFIG ================= */
-const firebaseConfig = {
-  apiKey: "PASTE_HERE",
-  authDomain: "PASTE_HERE",
-  databaseURL: "PASTE_HERE",
-  projectId: "PASTE_HERE",
-  storageBucket: "PASTE_HERE",
-  messagingSenderId: "PASTE_HERE",
-  appId: "PASTE_HERE"
-};
+  /* ================= SAFE GLOBAL STATE ================= */
+  let players = [];
+  let index = 0;
+  let bid = 0;
 
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
+  /* ================= FIREBASE ================= */
+  const firebaseConfig = {
+    apiKey: "PASTE_HERE",
+    authDomain: "PASTE_HERE",
+    databaseURL: "PASTE_HERE",
+    projectId: "PASTE_HERE",
+    storageBucket: "PASTE_HERE",
+    messagingSenderId: "PASTE_HERE",
+    appId: "PASTE_HERE"
+  };
 
-/* ================= SYNC ================= */
-function sync() {
-  db.ref("auction").set({
-    current: players[index] || null,
-    bid,
-    index
-  });
-}
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
 
-/* ================= LOAD EXCEL (FIXED) ================= */
-document.getElementById("loadBtn").addEventListener("click", () => {
-  const file = document.getElementById("excelFile").files[0];
-  if (!file) {
-    alert("Please select Excel file");
-    return;
+  /* ================= ELEMENTS ================= */
+  const pname = document.getElementById("pname");
+  const prole = document.getElementById("prole");
+  const bidEl = document.getElementById("bid");
+
+  /* ================= SYNC ================= */
+  function sync() {
+    db.ref("auction").set({
+      current: players[index] || null,
+      bid,
+      index
+    });
   }
 
-  const reader = new FileReader();
+  /* ================= LOAD PLAYER ================= */
+  function loadPlayer() {
+    if (index >= players.length) {
+      pname.innerText = "Auction Completed";
+      bid = 0;
+      bidEl.innerText = "0.0";
+      sync();
+      return;
+    }
 
-  reader.onload = function (e) {
-    const data = new Uint8Array(e.target.result);
-    const workbook = XLSX.read(data, { type: "array" });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const p = players[index];
+    pname.innerText = p.Name || "Unnamed";
+    prole.innerText = p.Role || "";
+    bid = Number(p.BasePrice) || 0;
+    bidEl.innerText = bid.toFixed(1);
+    sync();
+  }
 
-    players = XLSX.utils.sheet_to_json(sheet);
-    index = 0;
+  /* ================= LOAD EXCEL (FIXED) ================= */
+  document.getElementById("loadBtn").addEventListener("click", () => {
+    const file = document.getElementById("excelFile").files[0];
+    if (!file) return alert("Select Excel file");
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, { type: "array" });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      players = XLSX.utils.sheet_to_json(sheet);
+      index = 0;
+      loadPlayer();
+    };
+    reader.readAsArrayBuffer(file);
+  });
+
+  /* ================= ACTIONS ================= */
+  document.getElementById("bidBtn").onclick = () => {
+    bid += 0.5;
+    bidEl.innerText = bid.toFixed(1);
+    sync();
+  };
+
+  document.getElementById("sellMI").onclick = () => sell("MI");
+  document.getElementById("sellCSK").onclick = () => sell("CSK");
+  document.getElementById("sellRCB").onclick = () => sell("RCB");
+
+  document.getElementById("unsoldBtn").onclick = () => {
+    if (!players[index]) return;
+    db.ref("unsold").push(players[index].Name);
+    index++;
     loadPlayer();
   };
 
-  reader.readAsArrayBuffer(file);
-});
-
-/* ================= PLAYER ================= */
-function loadPlayer() {
-  if (index >= players.length) {
-    pname.innerText = "Auction Completed";
-    bid = 0;
-    updateBid();
-    return;
+  function sell(team) {
+    if (!players[index]) return;
+    db.ref("sold").push({
+      name: players[index].Name,
+      team,
+      bid
+    });
+    index++;
+    loadPlayer();
   }
 
-  const p = players[index];
-  pname.innerText = p.Name || "Unnamed Player";
-  prole.innerText = p.Role || "";
-  bid = Number(p.BasePrice) || 0;
-  updateBid();
-  sync();
-}
-
-function bidUp() {
-  bid += 0.5;
-  updateBid();
-  sync();
-}
-
-function updateBid() {
-  document.getElementById("bid").innerText = bid.toFixed(1);
-}
-
-/* ================= SELL / UNSOLD ================= */
-function sell(team) {
-  if (!players[index]) return;
-
-  db.ref("sold").push({
-    name: players[index].Name,
-    team,
-    bid
-  });
-
-  index++;
-  loadPlayer();
-}
-
-function markUnsold() {
-  if (!players[index]) return;
-
-  db.ref("unsold").push(players[index].Name);
-  index++;
-  loadPlayer();
-}
+});
 </script>
 
 </body>
