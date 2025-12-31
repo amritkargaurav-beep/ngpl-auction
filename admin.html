@@ -5,8 +5,11 @@
 <title>NGPL Auction – Admin</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
+<!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<!-- Excel -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <style>
@@ -44,23 +47,26 @@ button,input{width:100%;padding:8px;margin-top:6px}
 <script>
 document.addEventListener("DOMContentLoaded", () => {
 
-  /* ================= SAFE GLOBAL STATE ================= */
+  /* ================= GLOBAL STATE ================= */
   let players = [];
   let index = 0;
   let bid = 0;
 
-  /* ================= FIREBASE ================= */
+  /* ================= FIREBASE (FIXED) ================= */
   const firebaseConfig = {
-     apiKey: "AIzaSyDHWCPegKtwhLgJ7OJr9QjayDK1QTf8UP0",
-  authDomain: "ngpl-auction.firebaseapp.com",
-  databaseURL: "https://ngpl-auction-default-rtdb.firebaseio.com",
-  projectId: "ngpl-auction",
-  storageBucket: "ngpl-auction.firebasestorage.app",
-  messagingSenderId: "80963451556",
-  appId: "1:80963451556:web:663f478280a60ab4de8431"
+    apiKey: "AIzaSyDHWCPegKtwhLgJ7OJr9QjayDK1QTf8UP0",
+    authDomain: "ngpl-auction.firebaseapp.com",
+    databaseURL: "https://ngpl-auction-default-rtdb.firebaseio.com",
+    projectId: "ngpl-auction",
+    storageBucket: "ngpl-auction.appspot.com",
+    messagingSenderId: "80963451556",
+    appId: "1:80963451556:web:663f478280a60ab4de8431"
   };
 
-  firebase.initializeApp(firebaseConfig);
+  if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+  }
+
   const db = firebase.database();
 
   /* ================= ELEMENTS ================= */
@@ -81,6 +87,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function loadPlayer() {
     if (index >= players.length) {
       pname.innerText = "Auction Completed";
+      prole.innerText = "";
       bid = 0;
       bidEl.innerText = "0.0";
       sync();
@@ -95,22 +102,20 @@ document.addEventListener("DOMContentLoaded", () => {
     sync();
   }
 
-  /* ================= LOAD EXCEL (FIXED) ================= */
-  document.getElementById("loadBtn").addEventListener("click", () => {
+  /* ================= LOAD EXCEL ================= */
+  document.getElementById("loadBtn").onclick = () => {
     const file = document.getElementById("excelFile").files[0];
     if (!file) return alert("Select Excel file");
 
     const reader = new FileReader();
-    reader.onload = (e) => {
-      const data = new Uint8Array(e.target.result);
-      const wb = XLSX.read(data, { type: "array" });
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-      players = XLSX.utils.sheet_to_json(sheet);
+    reader.onload = e => {
+      const wb = XLSX.read(new Uint8Array(e.target.result), { type: "array" });
+      players = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
       index = 0;
       loadPlayer();
     };
     reader.readAsArrayBuffer(file);
-  });
+  };
 
   /* ================= ACTIONS ================= */
   document.getElementById("bidBtn").onclick = () => {
